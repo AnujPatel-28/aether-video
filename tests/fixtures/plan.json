@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "plan-1",
+  "contractId": "contract-1",
+  "baseContentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "selectedSegments": [
+    "segment-main",
+    "segment-caveat"
+  ],
+  "removedSegments": [],
+  "reorderings": [],
+  "rationale": "Keep both statements.",
+  "unresolvedQuestions": [],
+  "estimatedDurationMs": 2000
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "experiment-fixture",
+  "taskId": "task-1",
+  "evaluationSpecId": "evaluation-1",
+  "initialContentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "safetyContextHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "model": {
+    "provider": "fixture-provider",
+    "modelId": "fixture-model",
+    "version": "fixture-version"
+  },
+  "sampling": {
+    "temperature": 0,
+    "seed": 42
+  },
+  "budget": {
+    "maxTokens": 5000,
+    "maxToolCalls": 30,
+    "maxRepairAttempts": 2,
+    "timeoutMs": 60000
+  },
+  "rendererPresetHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "evaluatorConfigHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "trialSeed": 42
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "contract-1",
+  "taskId": "task-1",
+  "objective": "Shorten the interview without changing its meaning.",
+  "targetDuration": {
+    "minMs": 1500,
+    "maxMs": 2500
+  },
+  "preserve": [
+    {
+      "description": "Main argument",
+      "inferredRanges": []
+    }
+  ],
+  "protect": [
+    {
+      "description": "Junior engineer caveat",
+      "inferredRanges": []
+    }
+  ],
+  "allow": [
+    "Remove repetition"
+  ],
+  "avoid": [
+    "Meaning distortion"
+  ],
+  "autonomy": "edit_candidate",
+  "successCriteria": [
+    {
+      "id": "visible-meaning",
+      "description": "Preserve the caveat stated by the user."
+    }
+  ]
+}

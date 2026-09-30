@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "task-1",
+  "rawRequest": "Shorten the interview. Preserve the main argument and the caveat about junior engineers.",
+  "userProvidedDurationTarget": {
+    "minMs": 1500,
+    "maxMs": 2500
+  },
+  "userProvidedSourceSelections": []
+}

@@ -1,0 +1,25 @@
+{
+  "name": "aether-video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": "24.12.0",
+    "pnpm": "11.19.0"
+  },
+  "scripts": {
+    "typecheck": "pnpm build && pnpm -r run typecheck && tsc -p tests/tsconfig.json --noEmit",
+    "build": "pnpm -r run build && tsc -p tests/tsconfig.json",
+    "test": "node --test .build/tests/*.test.js"
+  },
+  "devDependencies": {
+    "@aether/core": "workspace:*",
+    "@aether/tools": "workspace:*",
+    "@aether/workspace": "workspace:*",
+    "@aether/verification": "workspace:*",
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3",
+    "zod": "4.1.13"
+  }
+}

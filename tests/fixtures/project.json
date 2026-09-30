@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "project-fixture",
+  "assets": [
+    {
+      "id": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mediaPath": "assets/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "durationMs": 4000,
+      "frameCount": 100,
+      "video": {
+        "streamIndex": 0,
+        "width": 640,
+        "height": 360,
+        "fpsNumerator": 25,
+        "fpsDenominator": 1
+      },
+      "audio": {
+        "streamIndex": 1,
+        "sampleRate": 48000,
+        "channels": 1
+      },
+      "presentationOriginUs": 0
+    }
+  ],
+  "transcriptHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "segments": [
+    {
+      "id": "segment-main",
+      "assetId": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRange": {
+        "startMs": 10,
+        "endMs": 990
+      },
+      "transcriptText": "The main argument is to make changes carefully."
+    },
+    {
+      "id": "segment-caveat",
+      "assetId": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRange": {
+        "startMs": 1010,
+        "endMs": 1980
+      },
+      "transcriptText": "Junior engineers still need supervision.",
+      "speaker": "speaker-1"
+    }
+  ],
+  "sequence": {
+    "id": "sequence-1",
+    "clips": [
+      {
+        "id": "clip-main",
+        "assetId": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceRange": {
+          "startMs": 0,
+          "endMs": 1000
+        },
+        "timelineStartMs": 0
+      },
+      {
+        "id": "clip-caveat",
+        "assetId": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceRange": {
+          "startMs": 1000,
+          "endMs": 2000
+        },
+        "timelineStartMs": 1000
+      }
+    ]
+  }
+}

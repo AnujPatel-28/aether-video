@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "evaluation-1",
+  "sourceHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "transcriptHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "targetDuration": {
+    "minMs": 1500,
+    "maxMs": 2500
+  },
+  "retentionCriteria": [
+    {
+      "id": "hidden-gold-caveat",
+      "description": "Independent reference caveat annotation",
+      "referenceRanges": [
+        {
+          "assetId": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "range": {
+            "startMs": 1200,
+            "endMs": 1800
+          }
+        }
+      ],
+      "contextRanges": [
+        {
+          "assetId": "asset-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "range": {
+            "startMs": 1000,
+            "endMs": 2000
+          }
+        }
+      ]
+    }
+  ],
+  "semanticRubric": [
+    {
+      "id": "hidden-meaning",
+      "description": "Preserve the main argument and qualification in context."
+    }
+  ]
+}

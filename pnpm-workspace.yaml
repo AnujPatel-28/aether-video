@@ -1,0 +1,8 @@
+packages:
+  - packages/*
+  - apps/*
+nodeVersion: 24.12.0
+engineStrict: true
+strictPeerDependencies: true
+savePrefix: ''
+pmOnFail: error
