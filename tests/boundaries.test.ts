@@ -94,6 +94,18 @@ test('package dependency closure for Core/Tools never installs an evaluator pack
   visit('@aether/core'); visit('@aether/tools');
 });
 
+test('pure Core imports only local Core modules, Zod and deterministic standard crypto', () => {
+  const source = resolve(root, 'packages/core/src');
+  for (const file of readdirSync(source).filter(file => file.endsWith('.ts'))) {
+    for (const specifier of imports(readFileSync(resolve(source, file), 'utf8'))) {
+      if (specifier.startsWith('.')) {
+        const local = relative(source, resolve(source, specifier));
+        assert.ok(!local.startsWith('..' + sep) && local !== '..' && !isAbsolute(local));
+      } else assert.ok(specifier === 'zod' || specifier === 'node:crypto', `Impure Core dependency: ${specifier}`);
+    }
+  }
+});
+
 test('boundary checker covers re-exports, type imports and dynamic imports and rejects an evaluator reach', () => {
   assert.deepEqual(imports("import type { T } from './types.js'; export * from './public.js'; const hidden = import('@aether/verification/evaluator'); type Gold = import('@aether/verification/evaluator').EvaluationSpec;"), ['./types.js', './public.js', '@aether/verification/evaluator', '@aether/verification/evaluator']);
   assert.throws(() => imports('const value = import(variable);'));
@@ -108,8 +120,10 @@ test('runtime exports separate visible tasks, AETHER representations and hidden 
   }
   assert.deepEqual(Object.keys(Tools), ['TaskInstructionsSchema']);
   assert.deepEqual(Object.keys(Verification), ['MechanicalVerificationResultSchema']);
-  for (const name of ['applyBatch', 'split', 'trim', 'move', 'undo', 'render', 'runExperiment']) {
-    assert.equal(name in Core, false, `Milestones 2-6 must not be exposed: ${name}`);
+  assert.equal(typeof Core.applyBatch, 'function');
+  assert.equal(typeof Core.executeEditBatch, 'function');
+  for (const name of ['split', 'trim', 'move', 'undo', 'render', 'runExperiment']) {
+    assert.equal(name in Core, false, `Unapproved standalone/history/media/experiment API: ${name}`);
   }
 });
 

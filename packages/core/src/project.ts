@@ -42,7 +42,7 @@ export const TimelineClipSchema = z.strictObject({
   if ([clip.sourceRange.startMs, clip.sourceRange.endMs, clip.timelineStartMs].some(time => time % 40 !== 0)) {
     context.addIssue({ code: 'custom', message: 'Clip boundaries and positions must align to 40 ms frames' });
   }
-  if (!Number.isSafeInteger(clip.timelineStartMs + clip.sourceRange.endMs - clip.sourceRange.startMs)) {
+  if (!Number.isSafeInteger(clip.timelineStartMs + (clip.sourceRange.endMs - clip.sourceRange.startMs))) {
     context.addIssue({ code: 'custom', message: 'Timeline end must be a safe integer' });
   }
 });
@@ -75,7 +75,7 @@ export const ProjectIRSchema = z.strictObject({
     if (clip.timelineStartMs < previousEnd) {
       context.addIssue({ code: 'custom', path: ['sequence', 'clips'], message: 'Timeline clips overlap' });
     }
-    previousEnd = clip.timelineStartMs + clip.sourceRange.endMs - clip.sourceRange.startMs;
+    previousEnd = clip.timelineStartMs + (clip.sourceRange.endMs - clip.sourceRange.startMs);
   }
 });
 

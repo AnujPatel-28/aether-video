@@ -113,7 +113,7 @@ test('genuine locks require explicit user provenance; task/contract schemas do n
   assert.equal(KernelSafetyContextSchema.safeParse({ ...safetyFixture(), userLocks: [lock, lock] }).success, false);
 });
 
-test('all five operation command shapes parse, without exposing apply functions', () => {
+test('all five operation command shapes parse as strict data contracts', () => {
   const variants = [operation,
     { type: 'trim', operationId: 'trim-1', clipId: 'clip-main', sourceRange: { startMs: 40, endMs: 800 } },
     { type: 'delete', operationId: 'delete-1', clipId: 'clip-main' },

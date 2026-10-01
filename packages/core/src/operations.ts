@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { IdSchema, MsSchema, RangeSchema, UIntSchema } from './primitives.js';
 
-// Command data contracts only. No operation execution or kernel in Milestone 1.
+// Requested command times may be off-grid; applyBatch requires effective aligned times.
 const fields = { operationId: IdSchema };
 export const EditOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...fields, type: z.literal('split'), clipId: IdSchema, atSourceMs: MsSchema }),
