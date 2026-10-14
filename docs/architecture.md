@@ -120,3 +120,6 @@ Prefer:
 - PostgreSQL only when persistence is genuinely needed
 
 Avoid cloud architecture until the experiment requires it.
+
+## Post-V0 direction (not implemented)
+The agent-native editor (human UI and agent API as equal clients of this kernel) is designed in [Proposal 002](proposals/002-agent-native-editor-vision.md), [editor-hld.md](design/editor-hld.md) and [editor-lld.md](design/editor-lld.md). It uses a separate ProjectIR v2 schema; nothing above changes, and V0 stays pinned to ProjectIR v1.
