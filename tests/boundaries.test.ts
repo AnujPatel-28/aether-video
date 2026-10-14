@@ -133,3 +133,17 @@ test('test runtime and declared Node/pnpm pins match the chosen foundation toolc
   assert.equal(readFileSync(resolve(root, '.node-version'), 'utf8').trim(), manifest.engines.node);
   assert.equal(manifest.packageManager, `pnpm@${manifest.engines.pnpm}`);
 });
+
+test('workspace store never reaches hidden evaluation, AETHER orchestration or an evaluations path', () => {
+  const source = resolve(root, 'packages/workspace/src');
+  for (const file of readdirSync(source).filter(file => file.endsWith('.ts'))) {
+    const text = readFileSync(resolve(source, file), 'utf8');
+    assert.ok(!text.includes('evaluations'), `${file} must not construct an evaluations path`);
+    for (const specifier of imports(text)) {
+      assert.ok(specifier.startsWith('./') || specifier.startsWith('node:') || specifier === 'zod'
+        || specifier === '@aether/core' || specifier === '@aether/tools', `${file}: unexpected import ${specifier}`);
+    }
+  }
+  const dependencies = Object.keys(packages.get('@aether/workspace')!.manifest.dependencies ?? {});
+  assert.deepEqual(dependencies.sort(), ['@aether/core', '@aether/tools', 'zod']);
+});

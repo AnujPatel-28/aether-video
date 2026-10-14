@@ -147,6 +147,18 @@ function execute(projectInput: unknown, rows: NormalizedOperation[], safetyInput
     beforeContentHash, afterContentHash, operationReceipts, clipMappings: Object.fromEntries(mappings) };
 }
 
+/** Validate a whole state against its safety context without editing it (init, undo/redo, promotion). */
+export function checkProjectState(projectInput: unknown, safetyInput: unknown): { ok: true; contentHash: string } | KernelFailure {
+  const projectParse = ProjectIRSchema.safeParse(projectInput);
+  if (!projectParse.success) return structureError(projectParse.error.issues, 'project');
+  const safetyParse = KernelSafetyContextSchema.safeParse(safetyInput);
+  if (!safetyParse.success) return kernelFailure('schema_invalid', 'safety', 'Invalid kernel safety context');
+  if (safetyParse.data.projectId !== projectParse.data.id) return kernelFailure('invalid_reference', 'safety', 'Safety context belongs to another project');
+  const lockError = checkLocks(projectParse.data, safetyParse.data, 'safety');
+  if (lockError) return lockError;
+  return { ok: true, contentHash: hashProjectIR(projectParse.data) };
+}
+
 /** Pure reducer. Inputs are effective operations; off-grid times are rejected. */
 export function applyBatch(project: unknown, effectiveOperations: unknown, safety: unknown): KernelResult {
   const parsed = OperationsSchema.safeParse(effectiveOperations);

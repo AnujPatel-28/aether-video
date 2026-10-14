@@ -4,7 +4,7 @@ Status: **Design only. Not implemented.** Requires an ExecPlan and owner approva
 
 Date: 2026-10-14
 Parent: [editor-hld.md](editor-hld.md). Invariant IDs (I1–I8) refer to HLD §2.
-Builds on: Milestone 2 kernel (`packages/core`), Milestone 3 workspace store ([ExecPlan](../execplans/v0.1-milestone-3-workspace.md)), Milestone 4 renderer.
+Builds on (M3 implemented 2026-10-14; v1 receipts carry no `actor`/`rationale`, which arrive only with v2 batches): Milestone 2 kernel (`packages/core`), Milestone 3 workspace store ([ExecPlan](../execplans/v0.1-milestone-3-workspace.md)), Milestone 4 renderer.
 
 V1 scope: ProjectIR v2 and migration, v2 operations, actor-scoped capabilities, command registry, owner daemon, diff engine, review service, read-only timeline UI with branch review. Human timeline editing, analysis layers, color, co-presence and macros are V1.x/V2 and are specified only at HLD level, except where V1 schemas must leave room for them.
 
@@ -193,7 +193,7 @@ Clip ids are **not** used for matching, because splits create new ids. The diff 
 Complexity is O(n log n) for atomization plus O(n²) for the LCS. That is fine for V1 (talking-head timelines have a few hundred clips).
 
 ### 5.3 Attribution to receipts
-Replay the workspace receipts in order from `base`, through `executeEditBatch`, and diff each step against the previous one. Every atom change is tagged with the receipt that produced it. A change's `dependsOn` lists changes from earlier receipts that created clip ids its receipt references (found from `createdClipIds` and `retiredClipIds` in the operation receipts). Replay is deterministic because child ids are hash-derived.
+Replay the workspace receipts in order from `base` with `applyBatch` over each receipt's stored **effective** operations (exactly as M3 `replay` does), and diff each step against the previous one. Every atom change is tagged with the receipt that produced it. A change's `dependsOn` lists changes from earlier receipts that created clip ids its receipt references (found from `createdClipIds` and `retiredClipIds` in the operation receipts). Replay is deterministic because child ids are hash-derived.
 
 ## 6. Review service
 
@@ -209,7 +209,7 @@ reviewRequestRevision(sessionId, reviewer, note): void  // workspace → open; n
 - **Accept selected**:
   1. Close `changeIds` over `dependsOn`. The UI shows dependencies that were auto-added.
   2. Take the set of receipts behind those changes, in original order.
-  3. Replay each receipt's batch onto the **current accepted head** with `executeEditBatch`, under the reviewer's grant and with `actor` set to the original actor. Add a `promotedBy` field to the receipt.
+  3. Replay each receipt's stored effective operations onto the **current accepted head** with `applyBatch` (no re-normalization, as in M3 `replay`), under the reviewer's grant and with `actor` set to the original actor. Add a `promotedBy` field to the receipt.
   4. If every replay succeeds, commit atomically as one accepted-head update. If any fails, nothing is committed.
   - Receipt granularity is the unit. A receipt that contains both wanted and unwanted operations cannot be split in V1. The UI says so, and agents are prompted to batch one intent per receipt.
 - **Conflict**: any replay failure (typically `invalid_reference` because the accepted head no longer has a clip) returns `{ conflict: true, failedReceiptId, kernelError }`. The workspace stays frozen and intact. The human can request a revision, and the agent rebases by forking from the new head. There is no auto-merge, consistent with M3.

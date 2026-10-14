@@ -83,6 +83,9 @@ importers:
       '@aether/core':
         specifier: workspace:*
         version: link:../core
+      '@aether/tools':
+        specifier: workspace:*
+        version: link:../tools
       zod:
         specifier: 4.1.13
         version: 4.1.13
