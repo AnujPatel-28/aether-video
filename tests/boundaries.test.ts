@@ -141,9 +141,23 @@ test('workspace store never reaches hidden evaluation, AETHER orchestration or a
     assert.ok(!text.includes('evaluations'), `${file} must not construct an evaluations path`);
     for (const specifier of imports(text)) {
       assert.ok(specifier.startsWith('./') || specifier.startsWith('node:') || specifier === 'zod'
-        || specifier === '@aether/core' || specifier === '@aether/tools', `${file}: unexpected import ${specifier}`);
+        || specifier === '@aether/core' || specifier === '@aether/tools' || specifier === '@aether/media', `${file}: unexpected import ${specifier}`);
     }
   }
   const dependencies = Object.keys(packages.get('@aether/workspace')!.manifest.dependencies ?? {});
-  assert.deepEqual(dependencies.sort(), ['@aether/core', '@aether/tools', 'zod']);
+  assert.deepEqual(dependencies.sort(), ['@aether/core', '@aether/media', '@aether/tools', 'zod']);
+});
+
+test('media has no store, tool, orchestration or evaluation reach (E1)', () => {
+  const source = resolve(root, 'packages/media/src');
+  for (const file of readdirSync(source).filter(file => file.endsWith('.ts'))) {
+    const text = readFileSync(resolve(source, file), 'utf8');
+    assert.ok(!text.includes('evaluations'), `${file} must not construct an evaluations path`);
+    for (const specifier of imports(text)) {
+      assert.ok(specifier.startsWith('./') || specifier.startsWith('node:') || specifier === 'zod' || specifier === '@aether/core',
+        `${file}: unexpected import ${specifier}`);
+    }
+  }
+  const dependencies = Object.keys(packages.get('@aether/media')!.manifest.dependencies ?? {});
+  assert.deepEqual(dependencies.sort(), ['@aether/core', 'zod']);
 });

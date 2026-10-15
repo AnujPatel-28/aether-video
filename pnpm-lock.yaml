@@ -11,6 +11,9 @@ importers:
       '@aether/core':
         specifier: workspace:*
         version: link:packages/core
+      '@aether/media':
+        specifier: workspace:*
+        version: link:packages/media
       '@aether/tools':
         specifier: workspace:*
         version: link:packages/tools
@@ -59,6 +62,9 @@ importers:
       '@aether/core':
         specifier: workspace:*
         version: link:../core
+      zod:
+        specifier: 4.1.13
+        version: 4.1.13
 
   packages/tools:
     dependencies:
@@ -83,6 +89,9 @@ importers:
       '@aether/core':
         specifier: workspace:*
         version: link:../core
+      '@aether/media':
+        specifier: workspace:*
+        version: link:../media
       '@aether/tools':
         specifier: workspace:*
         version: link:../tools

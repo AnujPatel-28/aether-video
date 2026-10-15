@@ -1,11 +1,18 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
-  applyBatch, canonicalSerialize, checkProjectState, EditBatchSchema, executeEditBatch, hashProjectIR,
-  KernelSafetyContextSchema, kernelFailure, ProjectIRSchema, serializeProjectIR,
+  alignTimeMs, applyBatch, canonicalSerialize, checkProjectState, EditBatchSchema, executeEditBatch, hashProjectIR,
+  KernelSafetyContextSchema, kernelFailure, ProjectIRSchema, serializeProjectIR, timelineContentFingerprint,
 } from '@aether/core';
-import type { KernelError, KernelSafetyContext, ProjectIR } from '@aether/core';
+import type { KernelError, KernelSafetyContext, ProjectIR, Range } from '@aether/core';
+import {
+  buildInitialProject, compileRecipe, fileDigest, importTranscript, IngestionRecordSchema, MediaFailure, measureOutput,
+  mediaFail, preflight, probeSource, RenderManifestSchema, RenderRequestSchema, renderToFile, resolveBinaries,
+  sequenceDurationMs, timingChecks,
+} from '@aether/media';
+import type { Binaries, BinaryVersions, IngestionRecord, RenderManifest } from '@aether/media';
 import { TaskInstructionsSchema } from '@aether/tools';
 import type { z } from 'zod';
 import { nodeStoreFs } from './fs.js';
@@ -18,7 +25,10 @@ import type {
   WorkspaceErrorCode, WorkspaceHead,
 } from './schemas.js';
 
-export interface StoreOptions { storeRoot: string; fs?: StoreFs }
+/** Trusted media configuration. Binaries default to AETHER_FFMPEG/AETHER_FFPROBE or PATH (E2). */
+export interface MediaOptions { binaries?: Binaries; timeoutMs?: number }
+export interface StoreOptions { storeRoot: string; fs?: StoreFs; media?: MediaOptions }
+export interface PreviewResult { manifest: RenderManifest; mediaPath: string; reused: boolean }
 export interface ReplayReport {
   ok: boolean;
   checkedReceipts: number;
@@ -39,6 +49,8 @@ export interface ProjectStore {
   discard(workspaceId: string): Promise<StoreResult<{ workspace: WorkspaceHead }>>;
   freezeSubmission(workspaceId: string): Promise<StoreResult<{ workspace: WorkspaceHead }>>;
   promote(workspaceId: string, expectedAcceptedRevision: number): Promise<StoreResult<{ acceptedHead: AcceptedHead }>>;
+  /** Render a workspace head (or a range of it) with a fixed preset into an immutable artifact. Read-only for state. */
+  renderPreview(workspaceId: string, request: unknown): Promise<StoreResult<PreviewResult>>;
   close(): Promise<void>;
 }
 
@@ -49,7 +61,7 @@ function fail(code: WorkspaceErrorCode, message: string, evidence: WorkspaceErro
   throw new StoreFailure({ code, message, evidence, ...(kernel ? { kernel } : {}) });
 }
 const RECEIPT_ID = /^receipt-[a-f0-9]{64}$/;
-const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+const sha256 = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 const serialize = (value: unknown) => canonicalSerialize(value) + '\n';
 
 function segment(value: unknown, field: 'projectId' | 'workspaceId'): string {
@@ -72,6 +84,12 @@ const files = {
   receipt: (id: string, receiptId: string) => `workspaces/${id}/receipts/${receiptId}.json`,
   notes: (id: string) => `workspaces/${id}/notes.json`,
   attempts: (id: string) => `workspaces/${id}/attempts.jsonl`,
+  assets: 'assets',
+  asset: (hash: string) => `assets/${hash}`,
+  transcript: 'transcript.json',
+  ingestion: 'ingestion.json',
+  artifact: (id: string) => `artifacts/${id}`,
+  manifest: (id: string) => `artifacts/${id}/manifest.json`,
 };
 
 /** Low-level reads and writes relative to one project directory. Every read fails closed (D5). */
@@ -108,6 +126,7 @@ async function guarded<T>(body: () => Promise<T>): Promise<StoreResult<T>> {
     return { ok: true, ...(await body()) };
   } catch (error) {
     if (error instanceof StoreFailure) return { ok: false, error: error.detail };
+    if (error instanceof MediaFailure) return { ok: false, error: { code: 'media', message: error.detail.message, evidence: {}, media: error.detail } };
     return { ok: false, error: { code: 'io_failed', message: 'Store I/O failed', evidence: {} } };
   }
 }
@@ -117,30 +136,75 @@ function kernelError(error: KernelError): never {
   return fail('kernel', error.message, {}, error);
 }
 
+/** Preview endpoints follow the same frame alignment as edits (nearest frame, ties earlier). */
+function alignRange(range: Range): Range {
+  const start = alignTimeMs(range.startMs);
+  const end = alignTimeMs(range.endMs);
+  if (!start.ok || !end.ok) return mediaFail('render_out_of_bounds', 'Render range cannot be aligned');
+  return { startMs: start.effectiveMs, endMs: end.effectiveMs };
+}
+
+type ProjectIo = ReturnType<typeof projectIo>;
+
+/** Shared by init and ingest: everything before accepted-head.json is an orphan until that single commit. */
+async function createProject(fs: StoreFs, storeRoot: string, projectInput: unknown, safetyInput: unknown,
+  prepare: (io: ProjectIo) => Promise<void> = async () => undefined): Promise<AcceptedHead> {
+  const check = checkProjectState(projectInput, safetyInput);
+  if (!check.ok) kernelError(check.error);
+  const project = ProjectIRSchema.parse(projectInput);
+  const safety = KernelSafetyContextSchema.parse(safetyInput);
+  const directory = join(storeRoot, 'projects', segment(project.id, 'projectId'));
+  const io = projectIo(fs, directory);
+  await fs.mkdir(directory);
+  await acquireLock(fs, io.path(files.lock));
+  try {
+    if (await io.exists(files.accepted)) fail('already_exists', 'Project already exists');
+    await fs.mkdir(io.path(files.snapshots));
+    await fs.mkdir(io.path(files.workspaces));
+    await prepare(io);
+    const contentHash = await io.writeSnapshot(project);
+    await io.write(files.safety, safety);
+    const acceptedHead: AcceptedHead = { schemaVersion: 1, revision: 0, contentHash, promotions: [] };
+    await io.write(files.accepted, acceptedHead);
+    return acceptedHead;
+  } finally {
+    await fs.remove(io.path(files.lock)).catch(() => undefined);
+  }
+}
+
 /** Create a new project store with accepted revision 0. Fails if the project already exists. */
 export async function initProject(options: StoreOptions, projectInput: unknown, safetyInput: unknown): Promise<StoreResult<{ acceptedHead: AcceptedHead }>> {
+  return guarded(async () => ({ acceptedHead: await createProject(options.fs ?? nodeStoreFs, options.storeRoot, projectInput, safetyInput) }));
+}
+
+/**
+ * Trusted lifecycle command: probe one controlled source, import its transcript, copy the source into
+ * content-addressed storage and create the full-source project. The user's files are only read.
+ */
+export async function ingestProject(options: StoreOptions, input: {
+  projectId: string; sourcePath: string; transcriptPath: string; safety: unknown;
+}): Promise<StoreResult<{ acceptedHead: AcceptedHead; ingestion: IngestionRecord }>> {
   const fs = options.fs ?? nodeStoreFs;
   return guarded(async () => {
-    const check = checkProjectState(projectInput, safetyInput);
-    if (!check.ok) kernelError(check.error);
-    const project = ProjectIRSchema.parse(projectInput);
-    const safety = KernelSafetyContextSchema.parse(safetyInput);
-    const directory = join(options.storeRoot, 'projects', segment(project.id, 'projectId'));
-    const io = projectIo(fs, directory);
-    await fs.mkdir(directory);
-    await acquireLock(fs, io.path(files.lock));
-    try {
-      if (await io.exists(files.accepted)) fail('already_exists', 'Project already exists');
-      await fs.mkdir(io.path(files.snapshots));
-      await fs.mkdir(io.path(files.workspaces));
-      const contentHash = await io.writeSnapshot(project);
-      await io.write(files.safety, safety);
-      const acceptedHead: AcceptedHead = { schemaVersion: 1, revision: 0, contentHash, promotions: [] };
-      await io.write(files.accepted, acceptedHead);
-      return { acceptedHead };
-    } finally {
-      await fs.remove(io.path(files.lock)).catch(() => undefined);
-    }
+    const projectId = segment(input.projectId, 'projectId');
+    const binaries = options.media?.binaries ?? resolveBinaries();
+    const versions = await preflight(binaries);
+    const probe = await probeSource(binaries, input.sourcePath, options.media?.timeoutMs);
+    const sourceHash = await fileDigest(input.sourcePath);
+    let transcriptBytes: Uint8Array;
+    try { transcriptBytes = await readFile(input.transcriptPath); } catch { return mediaFail('transcript_invalid', 'Transcript file is not readable'); }
+    const transcriptHash = sha256(transcriptBytes);
+    const { transcript, segments } = importTranscript(transcriptBytes, { assetId: `asset-${sourceHash}`, durationMs: probe.video.frameCount * 40 });
+    const project = buildInitialProject({ projectId, sourceHash, transcriptHash, probe, segments });
+    const ingestion = IngestionRecordSchema.parse({ schemaVersion: 1, sourceHash, transcriptHash, probe, binaries: versions });
+    const acceptedHead = await createProject(fs, options.storeRoot, project, input.safety, async io => {
+      await fs.mkdir(io.path(files.assets));
+      await fs.copyFileAtomic(input.sourcePath, io.path(files.asset(sourceHash)));
+      if (await fileDigest(io.path(files.asset(sourceHash))) !== sourceHash) fail('io_failed', 'Source changed while it was being copied');
+      await io.write(files.transcript, transcript);
+      await io.write(files.ingestion, ingestion);
+    });
+    return { acceptedHead, ingestion };
   });
 }
 
@@ -167,12 +231,12 @@ export async function openProjectStore(options: StoreOptions & { projectId: stri
       await fs.remove(io.path(files.lock)).catch(() => undefined);
       throw error;
     }
-    return { store: createStore(fs, io, projectId) };
+    return { store: createStore(fs, io, projectId, options.media ?? {}) };
   });
 }
 
 /** The only automatic repair: a promotion recorded in accepted-head.json marks its workspace committed. */
-async function repairPromotedWorkspaces(io: ReturnType<typeof projectIo>): Promise<void> {
+async function repairPromotedWorkspaces(io: ProjectIo): Promise<void> {
   const accepted = await io.readJson(files.accepted, AcceptedHeadSchema);
   for (const promotion of accepted.promotions) {
     if (!StoreSegmentSchema.safeParse(promotion.workspaceId).success) fail('store_corrupt', 'Invalid promoted workspace identity', { file: files.accepted });
@@ -181,8 +245,12 @@ async function repairPromotedWorkspaces(io: ReturnType<typeof projectIo>): Promi
   }
 }
 
-function createStore(fs: StoreFs, io: ReturnType<typeof projectIo>, projectId: string): ProjectStore {
+function createStore(fs: StoreFs, io: ProjectIo, projectId: string, media: MediaOptions): ProjectStore {
   let closed = false;
+  const binaries = media.binaries ?? resolveBinaries();
+  let binaryVersions: BinaryVersions | undefined;
+  let assetVerified = false;
+  let temporaryCounter = 0;
 
   async function loadSafety() {
     const safety = await io.readJson(files.safety, KernelSafetyContextSchema);
@@ -465,6 +533,56 @@ function createStore(fs: StoreFs, io: ReturnType<typeof projectIo>, projectId: s
       // Commit point is written. The workspace's own state is derived from promotions, so this is best-effort.
       await writeHead({ ...head, state: 'committed' }).catch(() => undefined);
       return { acceptedHead: next };
+    }),
+
+    renderPreview: (workspaceId, requestInput) => command(undefined, async () => {
+      const request = RenderRequestSchema.safeParse(requestInput);
+      if (!request.success) fail('invalid_input', 'Invalid render request');
+      const { head, project } = await loadWorkspace(workspaceId);
+      // Evidence must describe the head the caller saw; a newer head needs a new render.
+      if (request.data.contentHash !== head.head.contentHash) fail('stale_content', 'Render request names a different content hash', { workspaceId: head.id });
+      if (!(await io.exists(files.ingestion))) fail('media_unavailable', 'Project has no ingested media');
+      const ingestion = await io.readJson(files.ingestion, IngestionRecordSchema);
+      const asset = project.assets[0]!;
+      if (asset.contentHash !== ingestion.sourceHash) fail('store_corrupt', 'Ingestion record does not match the project asset', { file: files.ingestion });
+      const assetPath = io.path(files.asset(asset.contentHash));
+      if (!assetVerified) {
+        if (!(await io.exists(files.asset(asset.contentHash))) || await fileDigest(assetPath) !== asset.contentHash) {
+          fail('store_corrupt', 'Stored source asset is missing or altered', { file: files.asset(asset.contentHash) });
+        }
+        assetVerified = true;
+      }
+      binaryVersions ??= await preflight(binaries);
+      const effectiveRange: Range = request.data.range ? alignRange(request.data.range) : { startMs: 0, endMs: sequenceDurationMs(project) };
+      const recipe = compileRecipe(project, effectiveRange, request.data.preset, ingestion.probe);
+      const artifactId = 'artifact-' + sha256(canonicalSerialize({
+        domain: 'aether.artifact.v1', contentHash: head.head.contentHash, range: effectiveRange, preset: recipe.preset, binaries: binaryVersions,
+      }));
+      const mediaPath = io.path(`${files.artifact(artifactId)}/${recipe.mediaFile}`);
+      if (await io.exists(files.manifest(artifactId))) {
+        const manifest = await io.readJson(files.manifest(artifactId), RenderManifestSchema);
+        if (manifest.artifactId !== artifactId || !(await fs.exists(mediaPath))) fail('store_corrupt', 'Artifact does not match its identity', { file: files.manifest(artifactId) });
+        return { manifest, mediaPath, reused: true };
+      }
+      await fs.mkdir(io.path(files.artifact(artifactId)));
+      const temporary = `${mediaPath}.tmp-${process.pid}-${temporaryCounter++}`;
+      try {
+        await renderToFile(binaries, recipe, assetPath, temporary, media.timeoutMs);
+        const measured = await measureOutput(binaries, temporary, media.timeoutMs);
+        const outputDigest = await fileDigest(temporary);
+        await fs.rename(temporary, mediaPath);
+        const manifest: RenderManifest = RenderManifestSchema.parse({
+          schemaVersion: 1, artifactId, contentHash: head.head.contentHash, timelineContentFingerprint: timelineContentFingerprint(project),
+          ...(request.data.range ? { requestedRange: request.data.range } : {}), effectiveRange, preset: recipe.preset,
+          binaries: binaryVersions, mediaFile: recipe.mediaFile, expected: recipe.expected, measured,
+          checks: timingChecks(recipe, measured), outputDigest,
+        });
+        // The manifest is the artifact's commit point; a directory without one is an orphan.
+        await io.write(files.manifest(artifactId), manifest);
+        return { manifest, mediaPath, reused: false };
+      } finally {
+        await fs.remove(temporary).catch(() => undefined);
+      }
     }),
 
     async close() {

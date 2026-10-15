@@ -15,9 +15,10 @@
   },
   "devDependencies": {
     "@aether/core": "workspace:*",
+    "@aether/media": "workspace:*",
     "@aether/tools": "workspace:*",
-    "@aether/workspace": "workspace:*",
     "@aether/verification": "workspace:*",
+    "@aether/workspace": "workspace:*",
     "@types/node": "24.10.1",
     "typescript": "5.9.3",
     "zod": "4.1.13"

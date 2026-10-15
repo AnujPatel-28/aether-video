@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DigestSchema, EditBatchSchema, EditOperationSchema, IdSchema, MsSchema, UIntSchema } from '@aether/core';
 import type { KernelError } from '@aether/core';
+import type { MediaError } from '@aether/media';
 
 const RESERVED_NAMES = new Set(['con', 'prn', 'aux', 'nul',
   ...Array.from({ length: 9 }, (_, i) => `com${i + 1}`), ...Array.from({ length: 9 }, (_, i) => `lpt${i + 1}`)]);
@@ -81,12 +82,15 @@ export type WorkspaceErrorCode = 'stale_revision' | 'workspace_mismatch' | 'work
   | 'stale_base' | 'safety_changed' | 'store_corrupt' | 'owner_locked' | 'nothing_to_undo' | 'nothing_to_redo'
   | 'notes_too_large' | 'invalid_segment' | 'kernel'
   // Additions recorded in the implementation record.
-  | 'already_exists' | 'project_not_found' | 'empty_timeline' | 'invalid_input' | 'io_failed';
+  | 'already_exists' | 'project_not_found' | 'empty_timeline' | 'invalid_input' | 'io_failed'
+  // Milestone 4.
+  | 'media' | 'media_unavailable' | 'stale_content';
 export interface WorkspaceError {
   code: WorkspaceErrorCode;
   message: string;
   // Public mechanical evidence only; never raw caller input.
   evidence: { workspaceId?: string; receiptId?: string; expected?: number; actual?: number; file?: string };
   kernel?: KernelError;
+  media?: MediaError;
 }
 export type StoreResult<T> = ({ ok: true } & T) | { ok: false; error: WorkspaceError };

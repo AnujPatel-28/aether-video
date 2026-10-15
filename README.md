@@ -1,6 +1,6 @@
-# AETHER V0.1 — Milestones 1–3
+# AETHER V0.1 — Milestones 1–4
 
-A local research foundation for comparing direct model-to-tool video editing with structured Edit Contract / Editorial Plan / compiler orchestration. Contracts, canonical identity, timing normalization, a pure atomic editing kernel, an isolated reversible workspace store and deterministic tests are implemented. Milestones 4–6 remain unimplemented.
+A local research foundation for comparing direct model-to-tool video editing with structured Edit Contract / Editorial Plan / compiler orchestration. Contracts, canonical identity, timing normalization, a pure atomic editing kernel, an isolated reversible workspace store, controlled media ingestion and frame/sample-exact rendering, and deterministic tests are implemented. Milestones 5–6 remain unimplemented. Media features need FFmpeg and ffprobe on `PATH` (or `AETHER_FFMPEG`/`AETHER_FFPROBE`).
 
 ## Setup and checks
 
@@ -26,10 +26,11 @@ pnpm settings live in `pnpm-workspace.yaml`, including engine compatibility chec
 | `@aether/core` | Task-independent schemas, separate safety/user locks, commands, canonical hashing, timing normalization, pure atomic kernel and timeline-content fingerprint |
 | `@aether/tools` | Agent-visible TaskInstructions only; no tool implementation yet |
 | `@aether/tools/orchestration` | Optional AETHER EditContract and EditorialPlan; not exported from the shared agent entry |
-| `@aether/workspace` | Local filesystem store (Milestone 3): owner lock, workspaces, revision checks, batch deduplication, undo/redo/replay from hash-verified snapshots, notes storage, freeze, discard and promotion |
+| `@aether/workspace` | Local filesystem store (Milestone 3): owner lock, workspaces, revision checks, batch deduplication, undo/redo/replay from hash-verified snapshots, notes storage, freeze, discard and promotion; Milestone 4 adds `ingestProject` and `renderPreview` with immutable content-addressed artifacts |
 | `@aether/verification` | Public mechanical result shape only |
 | `@aether/verification/evaluator` | Hidden EvaluationSpec / ExperimentConfig and editorial result shapes; no evaluator implementation |
-| `@aether/media`, `@aether/harness-cli` | Empty package boundaries reserved for later milestones |
+| `@aether/media` | Milestone 4: FFmpeg preflight, strict 25 fps/48 kHz source probing, transcript import, pure render-recipe compiler, rendering and timing measurement. No store or mutation authority |
+| `@aether/harness-cli` | Empty package boundary reserved for Milestone 6 |
 
 The evaluator subpath is a trusted interface, not an OS security boundary. Core/Tools dependency and import-closure tests prevent accidental imports; Core imports only local Core modules, Zod and standard crypto. Future model callbacks must expose only visible inputs and shared tools. Ordinary editorial requests do not create user locks. The kernel accepts neither task instructions nor evaluation annotations; unlocked editorial content can be deleted successfully.
 
@@ -69,4 +70,4 @@ Split child ID is `clip-split-<SHA-256>` of UTF-8 `canonicalSerialize` applied t
 
 There are no timestamps or random IDs. Replaying identical effective edits from the same starting project yields identical state and IDs; this does not implement request deduplication. Operations may address children produced earlier in a batch. `workspaceId` and `expectedRevision` in EditBatch are validated correlation metadata only at this layer; the Milestone 3 workspace store enforces ownership, revision and deduplication before invoking the pure API.
 
-The [ExecPlan](docs/execplans/v0.1-foundation.md) records approval, actual results and remaining milestones. Milestone 3 is implemented and recorded in its [ExecPlan](docs/execplans/v0.1-milestone-3-workspace.md). Rendering, agents/planner/compiler, evaluation/experiments, UI and cloud infrastructure are not implemented.
+The [ExecPlan](docs/execplans/v0.1-foundation.md) records approval, actual results and remaining milestones. Milestones 3 and 4 are recorded in their ExecPlans ([M3](docs/execplans/v0.1-milestone-3-workspace.md), [M4](docs/execplans/v0.1-milestone-4-media.md)). Agent tools, agents/planner/compiler, evaluation/experiments, UI and cloud infrastructure are not implemented.

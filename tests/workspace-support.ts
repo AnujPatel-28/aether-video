@@ -108,6 +108,8 @@ export function faultFs() {
     async mkdir(path) { await gate(); await nodeStoreFs.mkdir(path); },
     async createExclusive(path, data) { await gate(); await nodeStoreFs.createExclusive(path, data); },
     async remove(path) { await gate(); await nodeStoreFs.remove(path); },
+    async rename(from, to) { await gate(); await nodeStoreFs.rename(from, to); },
+    async copyFileAtomic(source, path) { await gate(); await nodeStoreFs.copyFileAtomic(source, path); },
   };
   return { fs, writes: () => writes, crashed: () => dead, arm: (k: number) => { failAt = writes + k; } };
 }

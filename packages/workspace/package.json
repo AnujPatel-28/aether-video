@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@aether/core": "workspace:*",
+    "@aether/media": "workspace:*",
     "@aether/tools": "workspace:*",
     "zod": "4.1.13"
   }
