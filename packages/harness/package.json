@@ -1,0 +1,28 @@
+{
+  "name": "@aether/harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./evaluation": {
+      "types": "./dist/evaluation.d.ts",
+      "import": "./dist/evaluation.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aether/core": "workspace:*",
+    "@aether/media": "workspace:*",
+    "@aether/tools": "workspace:*",
+    "@aether/verification": "workspace:*",
+    "@aether/workspace": "workspace:*",
+    "zod": "4.1.13"
+  }
+}

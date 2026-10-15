@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DigestSchema, EditBatchSchema, EditOperationSchema, IdSchema, MsSchema, UIntSchema } from '@aether/core';
+import { DigestSchema, EditBatchSchema, EditOperationSchema, IdSchema, MsSchema, SourceRefSchema, UIntSchema } from '@aether/core';
 import type { KernelError } from '@aether/core';
 import type { MediaError } from '@aether/media';
 
@@ -67,6 +67,14 @@ export const AttemptRecordSchema = z.strictObject({
 
 export const NOTES_MAX_BYTES = 16 * 1024;
 export const NotesSchema = z.strictObject({ revision: UIntSchema, text: z.string() });
+
+/** One shared-tool call (Milestone 5). Inputs are digests; returned source ranges support Proposal 001 diagnostics. */
+export const ToolEventSchema = z.strictObject({
+  sequence: UIntSchema, tool: z.string(), inputDigest: z.string(), outcome: z.enum(['ok', 'error']),
+  errorCode: z.string().optional(), returnedSourceRanges: z.array(SourceRefSchema), contentBearing: z.boolean(),
+  receiptId: IdSchema.optional(), artifactId: IdSchema.optional(), latencyMs: z.number().nonnegative(),
+});
+export type ToolEvent = z.infer<typeof ToolEventSchema>;
 
 export type SnapshotRef = z.infer<typeof SnapshotRefSchema>;
 export type AgentWorkspace = z.infer<typeof AgentWorkspaceSchema>;

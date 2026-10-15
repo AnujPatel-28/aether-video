@@ -1,6 +1,6 @@
-# AETHER V0.1 — Milestones 1–4
+# AETHER V0.1 — Milestones 1–5
 
-A local research foundation for comparing direct model-to-tool video editing with structured Edit Contract / Editorial Plan / compiler orchestration. Contracts, canonical identity, timing normalization, a pure atomic editing kernel, an isolated reversible workspace store, controlled media ingestion and frame/sample-exact rendering, and deterministic tests are implemented. Milestones 5–6 remain unimplemented. Media features need FFmpeg and ffprobe on `PATH` (or `AETHER_FFMPEG`/`AETHER_FFPROBE`).
+A local research foundation for comparing direct model-to-tool video editing with structured Edit Contract / Editorial Plan / compiler orchestration. Contracts, canonical identity, timing normalization, a pure atomic editing kernel, an isolated reversible workspace store, controlled media ingestion and frame/sample-exact rendering, and deterministic tests are implemented. Milestone 5 adds the shared agent tools and the offline evaluator seam; Milestone 6 (readiness demo) remains. Media features need FFmpeg and ffprobe on `PATH` (or `AETHER_FFMPEG`/`AETHER_FFPROBE`).
 
 ## Setup and checks
 
@@ -24,11 +24,13 @@ pnpm settings live in `pnpm-workspace.yaml`, including engine compatibility chec
 | Entry point | Contents |
 | --- | --- |
 | `@aether/core` | Task-independent schemas, separate safety/user locks, commands, canonical hashing, timing normalization, pure atomic kernel and timeline-content fingerprint |
-| `@aether/tools` | Agent-visible TaskInstructions only; no tool implementation yet |
+| `@aether/tools` | Agent-visible TaskInstructions and the nine shared tool schemas and limits, identical for every arm |
+| `@aether/harness` | Trusted tool host (one workspace, frozen limits, budget, traced calls); `./evaluation` runs blind offline grading and Proposal 001 diagnostics |
 | `@aether/tools/orchestration` | Optional AETHER EditContract and EditorialPlan; not exported from the shared agent entry |
 | `@aether/workspace` | Local filesystem store (Milestone 3): owner lock, workspaces, revision checks, batch deduplication, undo/redo/replay from hash-verified snapshots, notes storage, freeze, discard and promotion; Milestone 4 adds `ingestProject` and `renderPreview` with immutable content-addressed artifacts |
 | `@aether/verification` | Public mechanical result shape only |
-| `@aether/verification/evaluator` | Hidden EvaluationSpec / ExperimentConfig and editorial result shapes; no evaluator implementation |
+| `@aether/verification/evaluator` | Hidden EvaluationSpec / ExperimentConfig and the deterministic evaluator (duration, retention, all-hard-criteria; semantic → review) |
+| `@aether/verification/diagnostics` | Trusted post-freeze failure-stage diagnostics (`diagnostics.v1`) |
 | `@aether/media` | Milestone 4: FFmpeg preflight, strict 25 fps/48 kHz source probing, transcript import, pure render-recipe compiler, rendering and timing measurement. No store or mutation authority |
 | `@aether/harness-cli` | Empty package boundary reserved for Milestone 6 |
 
@@ -70,4 +72,4 @@ Split child ID is `clip-split-<SHA-256>` of UTF-8 `canonicalSerialize` applied t
 
 There are no timestamps or random IDs. Replaying identical effective edits from the same starting project yields identical state and IDs; this does not implement request deduplication. Operations may address children produced earlier in a batch. `workspaceId` and `expectedRevision` in EditBatch are validated correlation metadata only at this layer; the Milestone 3 workspace store enforces ownership, revision and deduplication before invoking the pure API.
 
-The [ExecPlan](docs/execplans/v0.1-foundation.md) records approval, actual results and remaining milestones. Milestones 3 and 4 are recorded in their ExecPlans ([M3](docs/execplans/v0.1-milestone-3-workspace.md), [M4](docs/execplans/v0.1-milestone-4-media.md)). Agent tools, agents/planner/compiler, evaluation/experiments, UI and cloud infrastructure are not implemented.
+The [ExecPlan](docs/execplans/v0.1-foundation.md) records approval, actual results and remaining milestones. Milestones 3–5 are recorded in their ExecPlans ([M3](docs/execplans/v0.1-milestone-3-workspace.md), [M4](docs/execplans/v0.1-milestone-4-media.md), [M5](docs/execplans/v0.1-milestone-5-tools-evaluator.md)). Live model adapters, the AETHER planner/compiler, evaluation/experiments, UI and cloud infrastructure are not implemented.

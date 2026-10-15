@@ -75,6 +75,18 @@ export const ProjectIRV2Schema = z.strictObject({
 
 Track and clip arrays are canonically sorted (tracks by `order`; clips by `timelineStartMs`, then `id`), so hashing is stable. Add `hashProjectIRV2` with domain `aether.project.v2`.
 
+### 2.3a Frame rates beyond 25 fps (decided 2026-10-15)
+
+V0 supports only 25 fps CFR with 48 kHz audio. This is a deliberate foundation choice, not a permanent limit. At 25 fps one frame is exactly 40 ms and exactly 1,920 audio samples, so all timeline arithmetic is integer and exact. M4 proved that with decoded frames and samples. Experiment 001 uses controlled sources, so it needs nothing more.
+
+Other rates arrive with v2, in this order:
+1. **Integer-millisecond rates: 50 fps (20 ms) and 25 fps.** These only need `FRAME_MS` and the samples-per-frame figure to become per-asset values.
+2. **Common broadcast and web rates: 24, 30, 60, and 23.976 / 29.97 / 59.94 (×1000/1001).** These frames are not whole milliseconds, so v2 stores times as **integer frame indices with a per-sequence rational rate** (`fpsNumerator/fpsDenominator`). Milliseconds become a derived display unit. Audio sample positions stay exact using rational arithmetic (e.g. 1601.6 samples/frame at 29.97 resolves over a 5-frame cadence).
+3. **Variable frame rate (phones, screen recordings):** conformed at ingest to the nearest supported CFR, as an explicit, recorded transcode. It never happens silently, matching the M4 rule.
+4. **Mixed-rate sources in one sequence:** the sequence rate is authoritative and other assets are conformed. Multicam and true mixed-rate editing stay out of scope.
+
+The M4 recipe compiler already works in integer frames and samples, so moving to rational rates changes only how frame numbers map to time, not the exactness guarantees. Acceptance for each new rate reuses the M4 marker-decode tests at that rate.
+
 ### 2.4 Migration
 
 ```ts

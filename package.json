@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@aether/core": "workspace:*",
+    "@aether/harness": "workspace:*",
     "@aether/media": "workspace:*",
     "@aether/tools": "workspace:*",
     "@aether/verification": "workspace:*",

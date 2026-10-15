@@ -11,6 +11,9 @@ importers:
       '@aether/core':
         specifier: workspace:*
         version: link:packages/core
+      '@aether/harness':
+        specifier: workspace:*
+        version: link:packages/harness
       '@aether/media':
         specifier: workspace:*
         version: link:packages/media
@@ -53,6 +56,27 @@ importers:
 
   packages/core:
     dependencies:
+      zod:
+        specifier: 4.1.13
+        version: 4.1.13
+
+  packages/harness:
+    dependencies:
+      '@aether/core':
+        specifier: workspace:*
+        version: link:../core
+      '@aether/media':
+        specifier: workspace:*
+        version: link:../media
+      '@aether/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@aether/verification':
+        specifier: workspace:*
+        version: link:../verification
+      '@aether/workspace':
+        specifier: workspace:*
+        version: link:../workspace
       zod:
         specifier: 4.1.13
         version: 4.1.13

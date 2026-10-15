@@ -14,14 +14,15 @@ import {
 } from '@aether/media';
 import type { Binaries, BinaryVersions, IngestionRecord, RenderManifest } from '@aether/media';
 import { TaskInstructionsSchema } from '@aether/tools';
+import type { TaskInstructions } from '@aether/tools';
 import type { z } from 'zod';
 import { nodeStoreFs } from './fs.js';
 import type { StoreFs } from './fs.js';
 import {
-  AcceptedHeadSchema, BatchReceiptSchema, NOTES_MAX_BYTES, NotesSchema, StoreSegmentSchema, WorkspaceHeadSchema,
+  AcceptedHeadSchema, BatchReceiptSchema, NOTES_MAX_BYTES, NotesSchema, StoreSegmentSchema, ToolEventSchema, WorkspaceHeadSchema,
 } from './schemas.js';
 import type {
-  AcceptedHead, AttemptKind, AttemptRecord, BatchReceipt, Notes, SnapshotRef, StoreResult, WorkspaceError,
+  AcceptedHead, AttemptKind, AttemptRecord, BatchReceipt, Notes, SnapshotRef, StoreResult, ToolEvent, WorkspaceError,
   WorkspaceErrorCode, WorkspaceHead,
 } from './schemas.js';
 
@@ -40,6 +41,14 @@ export interface ProjectStore {
   forkWorkspace(workspaceId: string, task: unknown): Promise<StoreResult<{ workspace: WorkspaceHead }>>;
   readWorkspace(workspaceId: string): Promise<StoreResult<{ workspace: WorkspaceHead; project: ProjectIR }>>;
   readReceipt(workspaceId: string, receiptId: string): Promise<StoreResult<{ receipt: BatchReceipt }>>;
+  /** The visible task bound at fork. */
+  readTask(workspaceId: string): Promise<StoreResult<{ task: TaskInstructions }>>;
+  /** The genuine safety context (locks and limits) shared by every workspace. */
+  readSafety(): Promise<StoreResult<{ safety: KernelSafetyContext }>>;
+  /** Trusted tool host only: append one tool event to the workspace trace. Never read for state. */
+  appendToolEvent(workspaceId: string, event: Omit<ToolEvent, 'sequence'>): Promise<StoreResult<{ sequence: number }>>;
+  /** Trusted diagnostics only: the workspace's tool trace in order. */
+  readToolTrace(workspaceId: string): Promise<StoreResult<{ events: ToolEvent[] }>>;
   applyEditBatch(batch: unknown): Promise<StoreResult<{ outcome: 'applied' | 'no_change'; replayed: boolean; receipt: BatchReceipt; head: SnapshotRef }>>;
   undo(workspaceId: string, expectedRevision: number): Promise<StoreResult<{ head: SnapshotRef; receiptId: string }>>;
   redo(workspaceId: string, expectedRevision: number): Promise<StoreResult<{ head: SnapshotRef; receiptId: string }>>;
@@ -84,6 +93,7 @@ const files = {
   receipt: (id: string, receiptId: string) => `workspaces/${id}/receipts/${receiptId}.json`,
   notes: (id: string) => `workspaces/${id}/notes.json`,
   attempts: (id: string) => `workspaces/${id}/attempts.jsonl`,
+  toolTrace: (id: string) => `workspaces/${id}/tool-trace.jsonl`,
   assets: 'assets',
   asset: (hash: string) => `assets/${hash}`,
   transcript: 'transcript.json',
@@ -389,6 +399,38 @@ function createStore(fs: StoreFs, io: ProjectIo, projectId: string, media: Media
     readWorkspace: workspaceId => command(undefined, async () => {
       const { head, project } = await loadWorkspace(workspaceId);
       return { workspace: head, project };
+    }),
+
+    readTask: workspaceId => command(undefined, async () => {
+      const { head } = await loadWorkspace(workspaceId);
+      return { task: await io.readJson(files.task(head.id), TaskInstructionsSchema) };
+    }),
+
+    readSafety: () => command(undefined, async () => ({ safety: (await loadSafety()).safety })),
+
+    appendToolEvent: (workspaceId, eventInput) => command(undefined, async () => {
+      const { head } = await loadWorkspace(workspaceId);
+      const file = files.toolTrace(head.id);
+      const sequence = (await io.exists(file)) ? (await fs.readFile(io.path(file))).split('\n').filter(Boolean).length : 0;
+      const event = ToolEventSchema.safeParse({ ...eventInput, sequence });
+      if (!event.success) fail('invalid_input', 'Invalid tool event');
+      await fs.appendLine(io.path(file), canonicalSerialize(event.data));
+      return { sequence };
+    }),
+
+    readToolTrace: workspaceId => command(undefined, async () => {
+      const { head } = await loadWorkspace(workspaceId);
+      const file = files.toolTrace(head.id);
+      if (!(await io.exists(file))) return { events: [] };
+      const lines = (await fs.readFile(io.path(file))).split('\n').filter(Boolean);
+      const events = lines.map(line => {
+        let value: unknown;
+        try { value = JSON.parse(line); } catch { return fail('store_corrupt', 'Invalid tool trace line', { file }); }
+        const parsed = ToolEventSchema.safeParse(value);
+        if (!parsed.success) fail('store_corrupt', 'Invalid tool trace event', { file });
+        return parsed.data;
+      });
+      return { events };
     }),
 
     readReceipt: (workspaceId, receiptId) => command(undefined, async () => {

@@ -10,7 +10,7 @@ import * as Verification from '@aether/verification';
 const root = resolve('.');
 type Manifest = { name: string; dependencies?: Record<string, string>; exports?: Record<string, { import: string; types: string }> };
 const packages = new Map<string, { directory: string; manifest: Manifest }>();
-for (const directory of ['core', 'media', 'workspace', 'tools', 'verification']) {
+for (const directory of ['core', 'media', 'workspace', 'tools', 'verification', 'harness']) {
   const absolute = resolve(root, 'packages', directory);
   const manifest = JSON.parse(readFileSync(resolve(absolute, 'package.json'), 'utf8')) as Manifest;
   packages.set(manifest.name, { directory: absolute, manifest });
@@ -118,7 +118,8 @@ test('runtime exports separate visible tasks, AETHER representations and hidden 
     assert.equal(name in Tools, false, `Shared tools must not export ${name}`);
     assert.equal(name in Verification, false, `Public verification must not export ${name}`);
   }
-  assert.deepEqual(Object.keys(Tools), ['TaskInstructionsSchema']);
+  assert.deepEqual(Object.keys(Tools).sort(), ['DEFAULT_TOOL_LIMITS', 'TOOL_NAMES', 'TaskInstructionsSchema', 'ToolErrorCodeSchema', 'ToolErrorSchema',
+    'ToolInputSchemas', 'ToolLimitsSchema', 'ToolNameSchema', 'ToolOutputSchemas']);
   assert.deepEqual(Object.keys(Verification), ['MechanicalVerificationResultSchema']);
   assert.equal(typeof Core.applyBatch, 'function');
   assert.equal(typeof Core.executeEditBatch, 'function');
@@ -160,4 +161,23 @@ test('media has no store, tool, orchestration or evaluation reach (E1)', () => {
   }
   const dependencies = Object.keys(packages.get('@aether/media')!.manifest.dependencies ?? {});
   assert.deepEqual(dependencies.sort(), ['@aether/core', 'zod']);
+});
+
+test('the agent-side tool host never reaches the evaluator, diagnostics or the evaluation entry (F1, F11)', () => {
+  const source = resolve(root, 'packages/harness/src');
+  const visited = new Set<string>();
+  function walk(file: string): void {
+    if (visited.has(file)) return;
+    visited.add(file);
+    for (const specifier of imports(readFileSync(file, 'utf8'))) {
+      assert.ok(!specifier.startsWith('@aether/verification') && !specifier.startsWith('@aether/harness'), `${file}: ${specifier}`);
+      assert.ok(specifier.startsWith('./') || specifier.startsWith('node:') || specifier === 'zod'
+        || ['@aether/core', '@aether/tools', '@aether/workspace'].includes(specifier), `${file}: unexpected import ${specifier}`);
+      if (specifier.startsWith('./')) walk(resolve(dirname(file), specifier.replace(/\.js$/, '.ts')));
+    }
+  }
+  walk(resolve(source, 'index.ts'));
+  assert.ok(!visited.has(resolve(source, 'evaluation.ts')));
+  const harness = packages.get('@aether/harness')!.manifest;
+  assert.deepEqual(Object.keys(harness.exports ?? {}).sort(), ['.', './evaluation']);
 });
