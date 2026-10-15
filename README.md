@@ -1,6 +1,6 @@
-# AETHER V0.1 — Milestones 1–2
+# AETHER V0.1 — Milestones 1–3
 
-A local research foundation for comparing direct model-to-tool video editing with structured Edit Contract / Editorial Plan / compiler orchestration. Contracts, canonical identity, timing normalization, a pure atomic editing kernel and deterministic tests are implemented. Milestones 3–6 remain unimplemented.
+A local research foundation for comparing direct model-to-tool video editing with structured Edit Contract / Editorial Plan / compiler orchestration. Contracts, canonical identity, timing normalization, a pure atomic editing kernel, an isolated reversible workspace store and deterministic tests are implemented. Milestones 4–6 remain unimplemented.
 
 ## Setup and checks
 
@@ -26,7 +26,7 @@ pnpm settings live in `pnpm-workspace.yaml`, including engine compatibility chec
 | `@aether/core` | Task-independent schemas, separate safety/user locks, commands, canonical hashing, timing normalization, pure atomic kernel and timeline-content fingerprint |
 | `@aether/tools` | Agent-visible TaskInstructions only; no tool implementation yet |
 | `@aether/tools/orchestration` | Optional AETHER EditContract and EditorialPlan; not exported from the shared agent entry |
-| `@aether/workspace` | SnapshotRef / AgentWorkspace shapes only; no persistence/history |
+| `@aether/workspace` | Local filesystem store (Milestone 3): owner lock, workspaces, revision checks, batch deduplication, undo/redo/replay from hash-verified snapshots, notes storage, freeze, discard and promotion |
 | `@aether/verification` | Public mechanical result shape only |
 | `@aether/verification/evaluator` | Hidden EvaluationSpec / ExperimentConfig and editorial result shapes; no evaluator implementation |
 | `@aether/media`, `@aether/harness-cli` | Empty package boundaries reserved for later milestones |
@@ -67,6 +67,6 @@ Split child ID is `clip-split-<SHA-256>` of UTF-8 `canonicalSerialize` applied t
 }
 ```
 
-There are no timestamps or random IDs. Replaying identical effective edits from the same starting project yields identical state and IDs; this does not implement request deduplication. Operations may address children produced earlier in a batch. `workspaceId` and `expectedRevision` in EditBatch are validated correlation metadata only at this layer; a future workspace owner must enforce ownership and revision before invoking the pure API.
+There are no timestamps or random IDs. Replaying identical effective edits from the same starting project yields identical state and IDs; this does not implement request deduplication. Operations may address children produced earlier in a batch. `workspaceId` and `expectedRevision` in EditBatch are validated correlation metadata only at this layer; the Milestone 3 workspace store enforces ownership, revision and deduplication before invoking the pure API.
 
-The [ExecPlan](docs/execplans/v0.1-foundation.md) records approval, actual results and remaining milestones. Stop after Milestone 2: persistence/history, rendering, agents/planner/compiler, evaluation/experiments, UI and cloud infrastructure are not implemented.
+The [ExecPlan](docs/execplans/v0.1-foundation.md) records approval, actual results and remaining milestones. Milestone 3 is implemented and recorded in its [ExecPlan](docs/execplans/v0.1-milestone-3-workspace.md). Rendering, agents/planner/compiler, evaluation/experiments, UI and cloud infrastructure are not implemented.

@@ -341,3 +341,20 @@ test('stored identities are re-checked before use as paths: a tampered receipt I
   await writeFile(file, JSON.stringify(stored));
   err(await store.readWorkspace('ws-a'), 'store_corrupt');
 }, ['ws-a']));
+
+test('opaque clip IDs such as __proto__ survive receipts, deduplication and replay', async () => {
+  const root = await tempRoot();
+  const project = threeClipProject();
+  project.sequence.clips[0]!.id = '__proto__';
+  const store = await setup(root, ['ws-a'], ProjectIRSchema.parse(project));
+  try {
+    const value = batch('ws-a', 'b1', 0, [{ type: 'split', clipId: '__proto__', operationId: 'split', atSourceMs: 400 }]);
+    const { receipt } = ok(await store.applyEditBatch(value));
+    assert.ok(Object.hasOwn(receipt.clipMappings, '__proto__'));
+    assert.equal(receipt.clipMappings['__proto__']!.length, 2);
+    const stored = ok(await store.readReceipt('ws-a', receipt.receiptId)).receipt;
+    assert.deepEqual(Object.entries(stored.clipMappings), Object.entries(receipt.clipMappings));
+    assert.equal(ok(await store.applyEditBatch(value)).replayed, true);
+    assert.ok(ok(await store.replay('ws-a')).report.ok);
+  } finally { await store.close(); await removeRoot(root); }
+});

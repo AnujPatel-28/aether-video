@@ -45,12 +45,17 @@ export const OperationReceiptSchema = z.strictObject({
   operationIndex: UIntSchema, outcome: z.enum(['applied', 'no_change']),
   createdClipIds: z.array(IdSchema), retiredClipIds: z.array(IdSchema),
 });
+/** Validated in place, not rebuilt: z.record would drop opaque keys such as `__proto__`. */
+const ClipMappingsSchema = z.custom<Record<string, string[]>>(value =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
+  && Object.values(value).every(ids => Array.isArray(ids) && ids.every(id => IdSchema.safeParse(id).success)),
+'Invalid clip mappings');
 export const BatchReceiptSchema = z.strictObject({
   schemaVersion: z.literal(1), receiptId: IdSchema, workspaceId: IdSchema, batchId: IdSchema, payloadDigest: DigestSchema,
   fromRevision: UIntSchema, toRevision: UIntSchema,
   beforeContentHash: DigestSchema, afterContentHash: DigestSchema, safetyContextHash: DigestSchema,
   operationReceipts: z.array(OperationReceiptSchema).min(1),
-  clipMappings: z.record(z.string(), z.array(IdSchema)), changed: z.boolean(),
+  clipMappings: ClipMappingsSchema, changed: z.boolean(),
 });
 
 export const AttemptKindSchema = z.enum(['edit', 'undo', 'redo', 'promote', 'discard', 'freeze', 'notes']);
