@@ -11,13 +11,15 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "demo:foundation": "node dist/cli.js"
   },
   "dependencies": {
     "@aether/core": "workspace:*",
+    "@aether/harness": "workspace:*",
     "@aether/media": "workspace:*",
-    "@aether/workspace": "workspace:*",
     "@aether/tools": "workspace:*",
-    "@aether/verification": "workspace:*"
+    "@aether/verification": "workspace:*",
+    "@aether/workspace": "workspace:*"
   }
 }

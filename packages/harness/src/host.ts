@@ -20,9 +20,29 @@ export interface ToolHost {
   call(tool: string, input: unknown): Promise<ToolResult>;
   callsMade(): number;
   submission(): SubmissionRecord | undefined;
-  /** Trace appends that failed; a non-zero value invalidates the trial's diagnostics. */
+  /** Trace or ledger appends that failed; a non-zero value invalidates the trial's diagnostics and accounting. */
   traceFailures(): number;
+  /**
+   * Trusted adapter callback: record one model call. Usage left undefined/null is recorded as unavailable, never 0.
+   * Once the token budget is reached the current head is auto-submitted and further events are refused (G5).
+   */
+  recordModelEvent(event: ModelUsage): Promise<{ ok: true } | { ok: false; code: 'budget_exhausted' | 'submitted' }>;
+  recordRuntime(stage: string, wallMs: number, cpuMs?: number | null): Promise<void>;
+  tokensUsed(): number;
 }
+export interface ModelUsage {
+  stage: string;
+  requestDigest: string;
+  responseDigest?: string | null;
+  failed?: boolean;
+  latencyMs: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cacheTokens?: number | null;
+  reasoningTokens?: number | null;
+  costUsd?: number | null;
+}
+const USAGE_FIELDS = ['inputTokens', 'outputTokens', 'cacheTokens', 'reasoningTokens', 'costUsd'] as const;
 
 class ToolFailure extends Error {
   constructor(readonly detail: ToolError) { super(detail.message); }
@@ -90,7 +110,11 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
   const limits = Object.freeze(ToolLimitsSchema.parse(options.limits ?? DEFAULT_TOOL_LIMITS));
   let calls = 0;
   let traceFailures = 0;
+  let tokenCount = 0;
   let submitted: SubmissionRecord | undefined;
+  const ledger = async (event: Parameters<ProjectStore['appendLedgerEvent']>[1]) => {
+    if (!(await store.appendLedgerEvent(workspaceId, event)).ok) traceFailures++;
+  };
 
   const read = async () => unwrap(await store.readWorkspace(workspaceId));
   const segmentView = (project: ProjectIR, segment: ProjectIR['segments'][number]) => ({
@@ -106,6 +130,7 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
     const rendered = await store.renderPreview(workspaceId, { contentHash: head.contentHash, preset: 'delivery-h264-v1' });
     submitted = rendered.ok ? { outcome, head, artifactId: rendered.manifest.artifactId }
       : { outcome, head, renderError: rendered.error.media?.code ?? rendered.error.code };
+    await ledger({ kind: 'submission', outcome: submitted.renderError ? 'render_failed' : outcome });
     return submitted;
   }
 
@@ -123,7 +148,7 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
       const next = cursor + page.length;
       return {
         data: {
-          revision: workspace.head.revision, contentHash: workspace.head.contentHash, durationMs: at, frameMs: 40,
+          revision: workspace.head.revision, contentHash: workspace.head.contentHash, assetId: project.assets[0]!.id, durationMs: at, frameMs: 40,
           clips: page.map(clip => ({ clipId: clip.id, sourceRange: clip.sourceRange, timelineRange: { startMs: clip.timelineStartMs, endMs: end(clip.timelineStartMs, clip.sourceRange) } })),
           gaps, totalClips: clips.length, ...(next < clips.length ? { nextCursor: next } : {}),
         },
@@ -236,7 +261,7 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
     },
   };
 
-  async function trace(tool: string, input: unknown, started: number, result: ToolResult, handled?: Handled<ToolName>) {
+  async function trace(tool: string, input: unknown, started: number, result: ToolResult, handled?: Handled<ToolName>, replayed = false) {
     const appended = await store.appendToolEvent(workspaceId, {
       tool, inputDigest: inputDigest(input), outcome: result.ok ? 'ok' : 'error',
       ...(result.ok ? {} : { errorCode: result.error.evidence.kernelCode ?? result.error.code }),
@@ -244,7 +269,8 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
       ...(handled?.receiptId ? { receiptId: handled.receiptId } : {}), ...(handled?.artifactId ? { artifactId: handled.artifactId } : {}),
       latencyMs: Math.max(0, performance.now() - started),
     });
-    if (!appended.ok) traceFailures++;
+    if (!appended.ok) { traceFailures++; return; }
+    await ledger({ kind: 'tool', toolSequence: appended.sequence, tool, replayed });
   }
 
   return {
@@ -252,6 +278,26 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
     callsMade: () => calls,
     submission: () => submitted,
     traceFailures: () => traceFailures,
+    tokensUsed: () => tokenCount,
+    async recordModelEvent(usage) {
+      if (submitted) return { ok: false, code: submitted.outcome === 'budget_exhausted' ? 'budget_exhausted' : 'submitted' };
+      const value = (field: (typeof USAGE_FIELDS)[number]) => usage[field] ?? null;
+      await ledger({
+        kind: 'model', stage: usage.stage, requestDigest: usage.requestDigest, responseDigest: usage.responseDigest ?? null,
+        failed: usage.failed ?? false, latencyMs: usage.latencyMs, inputTokens: value('inputTokens'), outputTokens: value('outputTokens'),
+        cacheTokens: value('cacheTokens'), reasoningTokens: value('reasoningTokens'), costUsd: value('costUsd'),
+        unavailable: USAGE_FIELDS.filter(field => value(field) === null),
+      });
+      tokenCount += (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0) + (usage.reasoningTokens ?? 0);
+      if (tokenCount >= limits.maxTokens) {
+        await freezeAndRender('budget_exhausted');
+        return { ok: false, code: 'budget_exhausted' };
+      }
+      return { ok: true };
+    },
+    async recordRuntime(stage, wallMs, cpuMs = null) {
+      await ledger({ kind: 'runtime', stage, wallMs, cpuMs });
+    },
     async call(tool, input) {
       const started = performance.now();
       let handled: Handled<ToolName> | undefined;
@@ -274,7 +320,8 @@ export function createToolHost(options: ToolHostOptions): ToolHost {
         handled = undefined;
         result = { ok: false, error: error instanceof ToolFailure ? error.detail : { code: 'internal', message: MESSAGES.internal, evidence: {} } };
       }
-      await trace(ToolNameSchema.safeParse(tool).success ? tool : 'unknown', input, started, result, handled);
+      const replayed = result.ok && (result.data as { replayed?: boolean }).replayed === true;
+      await trace(ToolNameSchema.safeParse(tool).success ? tool : 'unknown', input, started, result, handled, replayed);
       return result;
     },
   };

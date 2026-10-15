@@ -14,6 +14,9 @@ importers:
       '@aether/harness':
         specifier: workspace:*
         version: link:packages/harness
+      '@aether/harness-cli':
+        specifier: workspace:*
+        version: link:apps/harness-cli
       '@aether/media':
         specifier: workspace:*
         version: link:packages/media
@@ -41,6 +44,9 @@ importers:
       '@aether/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@aether/harness':
+        specifier: workspace:*
+        version: link:../../packages/harness
       '@aether/media':
         specifier: workspace:*
         version: link:../../packages/media

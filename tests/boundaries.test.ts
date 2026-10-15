@@ -179,5 +179,5 @@ test('the agent-side tool host never reaches the evaluator, diagnostics or the e
   walk(resolve(source, 'index.ts'));
   assert.ok(!visited.has(resolve(source, 'evaluation.ts')));
   const harness = packages.get('@aether/harness')!.manifest;
-  assert.deepEqual(Object.keys(harness.exports ?? {}).sort(), ['.', './evaluation']);
+  assert.deepEqual(Object.keys(harness.exports ?? {}).sort(), ['.', './evaluation', './orchestration']);
 });

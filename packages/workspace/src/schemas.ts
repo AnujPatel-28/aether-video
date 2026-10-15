@@ -76,6 +76,26 @@ export const ToolEventSchema = z.strictObject({
 });
 export type ToolEvent = z.infer<typeof ToolEventSchema>;
 
+/** Unavailable usage is null with the field listed in `unavailable`, never 0 (Milestone 6, G4). */
+const Count = UIntSchema.nullable();
+export const LedgerEventSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('model'), sequence: UIntSchema, stage: z.string().min(1), requestDigest: DigestSchema,
+    responseDigest: DigestSchema.nullable(), failed: z.boolean(), latencyMs: z.number().nonnegative(),
+    inputTokens: Count, outputTokens: Count, cacheTokens: Count, reasoningTokens: Count, costUsd: z.number().nonnegative().nullable(),
+    unavailable: z.array(z.enum(['inputTokens', 'outputTokens', 'cacheTokens', 'reasoningTokens', 'costUsd'])),
+  }),
+  z.strictObject({ kind: z.literal('tool'), sequence: UIntSchema, toolSequence: UIntSchema, tool: z.string(), replayed: z.boolean() }),
+  z.strictObject({ kind: z.literal('runtime'), sequence: UIntSchema, stage: z.string().min(1), wallMs: z.number().nonnegative(), cpuMs: z.number().nonnegative().nullable() }),
+  z.strictObject({ kind: z.literal('submission'), sequence: UIntSchema, outcome: z.enum(['submitted', 'budget_exhausted', 'timeout', 'render_failed']) }),
+]);
+export type LedgerEvent = z.infer<typeof LedgerEventSchema>;
+export type LedgerEventInput = LedgerEvent extends infer E ? E extends LedgerEvent ? Omit<E, 'sequence'> : never : never;
+
+/** Trusted orchestration artifacts (AETHER contract/plan). Stored as opaque JSON; validated by the trusted writer. */
+export const OrchestrationArtifactNameSchema = z.enum(['contract', 'plan']);
+export type OrchestrationArtifactName = z.infer<typeof OrchestrationArtifactNameSchema>;
+
 export type SnapshotRef = z.infer<typeof SnapshotRefSchema>;
 export type AgentWorkspace = z.infer<typeof AgentWorkspaceSchema>;
 export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>;

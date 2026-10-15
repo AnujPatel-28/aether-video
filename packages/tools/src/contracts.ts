@@ -11,10 +11,10 @@ export const ToolNameSchema = z.enum(TOOL_NAMES);
 
 export const ToolLimitsSchema = z.strictObject({
   maxTimelinePage: PositiveIntSchema, maxSearchResults: PositiveIntSchema, maxQueryChars: PositiveIntSchema,
-  maxContextMs: UIntSchema, maxPreviewMs: PositiveIntSchema, maxToolCalls: PositiveIntSchema,
+  maxContextMs: UIntSchema, maxPreviewMs: PositiveIntSchema, maxToolCalls: PositiveIntSchema, maxTokens: PositiveIntSchema,
 });
 export const DEFAULT_TOOL_LIMITS: ToolLimits = Object.freeze({
-  maxTimelinePage: 200, maxSearchResults: 20, maxQueryChars: 200, maxContextMs: 30_000, maxPreviewMs: 60_000, maxToolCalls: 60,
+  maxTimelinePage: 200, maxSearchResults: 20, maxQueryChars: 200, maxContextMs: 30_000, maxPreviewMs: 60_000, maxToolCalls: 60, maxTokens: 200_000,
 });
 
 const workspace = { workspaceId: IdSchema };
@@ -39,7 +39,7 @@ const Head = z.strictObject({ revision: UIntSchema, contentHash: DigestSchema })
 
 export const ToolOutputSchemas = {
   get_timeline: z.strictObject({
-    revision: UIntSchema, contentHash: DigestSchema, durationMs: MsSchema, frameMs: z.literal(40),
+    revision: UIntSchema, contentHash: DigestSchema, assetId: IdSchema, durationMs: MsSchema, frameMs: z.literal(40),
     clips: z.array(z.strictObject({ clipId: IdSchema, sourceRange: RangeSchema, timelineRange: RangeSchema })),
     gaps: z.array(RangeSchema), totalClips: UIntSchema, nextCursor: UIntSchema.optional(),
   }),

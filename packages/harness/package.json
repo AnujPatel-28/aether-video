@@ -11,6 +11,10 @@
     "./evaluation": {
       "types": "./dist/evaluation.d.ts",
       "import": "./dist/evaluation.js"
+    },
+    "./orchestration": {
+      "types": "./dist/orchestration.d.ts",
+      "import": "./dist/orchestration.js"
     }
   },
   "scripts": {

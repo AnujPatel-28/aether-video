@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { z } from 'zod';
 import { canonicalSerialize } from '@aether/core';
 import { MechanicalVerificationResultSchema } from '@aether/verification';
 import type { MechanicalVerificationResult } from '@aether/verification';
@@ -110,4 +111,33 @@ export async function runDiagnostics(options: {
   const diagnostics = { schemaVersion: 1, runId: options.runId, rules: DIAGNOSTICS_VERSION, submissions: entries };
   await writeFile(join(directory, 'diagnostics.json'), canonicalSerialize(diagnostics) + '\n', { encoding: 'utf8', flag: 'wx' });
   return { diagnostics };
+}
+
+// ---- Milestone 6: trusted run manifest (G3). Written under the evaluation root, never under projects/. ----
+
+const Hash = z.string().regex(/^[a-f0-9]{64}$/);
+export const RunManifestSchema = z.strictObject({
+  schemaVersion: z.literal(1), runId: z.string(),
+  project: z.strictObject({ projectId: z.string(), sourceHash: Hash, transcriptHash: Hash, initialContentHash: Hash }),
+  taskHash: Hash, safetyHash: Hash, toolLimitsHash: Hash,
+  versions: z.strictObject({ tools: z.string(), evaluator: z.string(), diagnostics: z.string() }),
+  render: z.strictObject({ presets: z.array(z.string()), binaries: z.strictObject({ ffmpeg: z.string(), ffprobe: z.string() }) }),
+  model: z.strictObject({ provider: z.string(), modelId: z.string(), version: z.string() }),
+  sampling: z.record(z.string(), z.json()),
+  promptRule: z.string().min(1),
+  // Trusted-only: kept apart from submissions so grading stays blind.
+  conditions: z.array(z.strictObject({ submissionId: z.string(), workspaceId: z.string(), arm: z.string() })),
+  specHash: Hash,
+});
+export type RunManifest = z.infer<typeof RunManifestSchema>;
+
+export const hashJson = (value: unknown) => sha256(canonicalSerialize(value));
+
+export async function writeRunManifest(evaluationRoot: string, manifest: RunManifest): Promise<string> {
+  const value = RunManifestSchema.parse(manifest);
+  const directory = runDirectory(evaluationRoot, value.runId);
+  await mkdir(directory, { recursive: true });
+  const text = canonicalSerialize(value) + '\n';
+  await writeFile(join(directory, 'manifest.json'), text, { encoding: 'utf8', flag: 'wx' });
+  return sha256(text);
 }

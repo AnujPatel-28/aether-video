@@ -26,3 +26,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
+      - name: Foundation readiness demo (Milestone 6)
+        run: pnpm --filter @aether/harness-cli demo:foundation

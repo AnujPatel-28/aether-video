@@ -19,10 +19,10 @@ import type { z } from 'zod';
 import { nodeStoreFs } from './fs.js';
 import type { StoreFs } from './fs.js';
 import {
-  AcceptedHeadSchema, BatchReceiptSchema, NOTES_MAX_BYTES, NotesSchema, StoreSegmentSchema, ToolEventSchema, WorkspaceHeadSchema,
+  AcceptedHeadSchema, BatchReceiptSchema, NOTES_MAX_BYTES, LedgerEventSchema, NotesSchema, OrchestrationArtifactNameSchema, StoreSegmentSchema, ToolEventSchema, WorkspaceHeadSchema,
 } from './schemas.js';
 import type {
-  AcceptedHead, AttemptKind, AttemptRecord, BatchReceipt, Notes, SnapshotRef, StoreResult, ToolEvent, WorkspaceError,
+  AcceptedHead, AttemptKind, AttemptRecord, BatchReceipt, Notes, SnapshotRef, StoreResult, ToolEvent, WorkspaceError, LedgerEvent, LedgerEventInput, OrchestrationArtifactName,
   WorkspaceErrorCode, WorkspaceHead,
 } from './schemas.js';
 
@@ -49,6 +49,12 @@ export interface ProjectStore {
   appendToolEvent(workspaceId: string, event: Omit<ToolEvent, 'sequence'>): Promise<StoreResult<{ sequence: number }>>;
   /** Trusted diagnostics only: the workspace's tool trace in order. */
   readToolTrace(workspaceId: string): Promise<StoreResult<{ events: ToolEvent[] }>>;
+  /** Trusted host only: append one usage-ledger event (model, tool, runtime or submission). */
+  appendLedgerEvent(workspaceId: string, event: LedgerEventInput): Promise<StoreResult<{ sequence: number }>>;
+  readLedger(workspaceId: string): Promise<StoreResult<{ events: LedgerEvent[] }>>;
+  /** Trusted orchestration only: store a validated contract/plan while the workspace is open. Never a shared tool. */
+  writeOrchestrationArtifact(workspaceId: string, name: OrchestrationArtifactName, value: unknown): Promise<StoreResult<object>>;
+  readOrchestrationArtifact(workspaceId: string, name: OrchestrationArtifactName): Promise<StoreResult<{ value: unknown | undefined }>>;
   applyEditBatch(batch: unknown): Promise<StoreResult<{ outcome: 'applied' | 'no_change'; replayed: boolean; receipt: BatchReceipt; head: SnapshotRef }>>;
   undo(workspaceId: string, expectedRevision: number): Promise<StoreResult<{ head: SnapshotRef; receiptId: string }>>;
   redo(workspaceId: string, expectedRevision: number): Promise<StoreResult<{ head: SnapshotRef; receiptId: string }>>;
@@ -94,6 +100,8 @@ const files = {
   notes: (id: string) => `workspaces/${id}/notes.json`,
   attempts: (id: string) => `workspaces/${id}/attempts.jsonl`,
   toolTrace: (id: string) => `workspaces/${id}/tool-trace.jsonl`,
+  ledger: (id: string) => `workspaces/${id}/ledger.jsonl`,
+  orchestration: (id: string, name: string) => `workspaces/${id}/orchestration/${name}.json`,
   assets: 'assets',
   asset: (hash: string) => `assets/${hash}`,
   transcript: 'transcript.json',
@@ -416,6 +424,49 @@ function createStore(fs: StoreFs, io: ProjectIo, projectId: string, media: Media
       if (!event.success) fail('invalid_input', 'Invalid tool event');
       await fs.appendLine(io.path(file), canonicalSerialize(event.data));
       return { sequence };
+    }),
+
+    appendLedgerEvent: (workspaceId, eventInput) => command(undefined, async () => {
+      const { head } = await loadWorkspace(workspaceId);
+      const file = files.ledger(head.id);
+      const sequence = (await io.exists(file)) ? (await fs.readFile(io.path(file))).split('\n').filter(Boolean).length : 0;
+      const event = LedgerEventSchema.safeParse({ ...eventInput, sequence });
+      if (!event.success) fail('invalid_input', 'Invalid ledger event');
+      await fs.appendLine(io.path(file), canonicalSerialize(event.data));
+      return { sequence };
+    }),
+
+    readLedger: workspaceId => command(undefined, async () => {
+      const { head } = await loadWorkspace(workspaceId);
+      const file = files.ledger(head.id);
+      if (!(await io.exists(file))) return { events: [] };
+      const events = (await fs.readFile(io.path(file))).split('\n').filter(Boolean).map(line => {
+        let value: unknown;
+        try { value = JSON.parse(line); } catch { return fail('store_corrupt', 'Invalid ledger line', { file }); }
+        const parsed = LedgerEventSchema.safeParse(value);
+        if (!parsed.success) fail('store_corrupt', 'Invalid ledger event', { file });
+        return parsed.data;
+      });
+      return { events };
+    }),
+
+    writeOrchestrationArtifact: (workspaceId, nameInput, value) => command(undefined, async () => {
+      const name = OrchestrationArtifactNameSchema.parse(nameInput);
+      const { head } = await loadWorkspace(workspaceId);
+      requireOpen(head);
+      await fs.mkdir(io.path(`${files.workspace(head.id)}/orchestration`));
+      await io.write(files.orchestration(head.id, name), value);
+      return {};
+    }),
+
+    readOrchestrationArtifact: (workspaceId, nameInput) => command(undefined, async () => {
+      const name = OrchestrationArtifactNameSchema.parse(nameInput);
+      const { head } = await loadWorkspace(workspaceId);
+      const file = files.orchestration(head.id, name);
+      if (!(await io.exists(file))) return { value: undefined };
+      let value: unknown;
+      try { value = JSON.parse(await fs.readFile(io.path(file))); } catch { fail('store_corrupt', 'Invalid orchestration artifact', { file }); }
+      return { value };
     }),
 
     readToolTrace: workspaceId => command(undefined, async () => {

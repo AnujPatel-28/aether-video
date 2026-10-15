@@ -1,2 +1,4 @@
-// Milestone 1 boundary only. No CLI, experiment runner or model integration yet.
-export {};
+// Trusted readiness tooling: fixture generation, scripted adapters and the foundation demo.
+export * from './fixtures.js';
+export * from './adapters.js';
+export * from './demo.js';
